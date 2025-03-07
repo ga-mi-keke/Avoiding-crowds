@@ -6,6 +6,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const app = express();
 const db = require('./db');
+const path = require('path');
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -72,6 +73,13 @@ const authenticateToken = (req, res, next) => {
 
 app.get('/protected', authenticateToken, (req, res) => {
   res.send(`認証されたユーザーです: ${req.user.username}`);
+});
+// Reactのビルドフォルダを静的ファイルとして配信
+app.use(express.static(path.join(__dirname, 'build')));
+
+// API以外のリクエストはReactのindex.htmlを返す（React Router用）
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
 // サーバー起動
