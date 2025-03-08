@@ -73,6 +73,95 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+// POST /inquiries エンドポイント（企業様向け問い合わせ登録）
+app.post('/inquiries', (req, res) => {
+  const { email, company_name, company_description, technology1, technology2, technology3, technology4, technology5 } = req.body;
+  
+  // 必須項目チェック
+  if (!email || !company_name || !company_description) {
+    return res.status(400).json({ error: 'Eメール、企業名、企業内容説明は必須です' });
+  }
+  
+  const createdAt = new Date();
+  const sql = `
+    INSERT INTO company_inquiries 
+    (email, company_name, company_description, technology1, technology2, technology3, technology4, technology5, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+  const params = [
+    email,
+    company_name,
+    company_description,
+    technology1 || null,
+    technology2 || null,
+    technology3 || null,
+    technology4 || null,
+    technology5 || null,
+    createdAt
+  ];
+  
+  db.query(sql, params, (err, result) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: '問い合わせの登録に失敗しました' });
+    }
+    res.status(201).json({ message: '問い合わせが登録されました', id: result.insertId });
+  });
+});
+// 使用技術一覧取得エンドポイント
+app.get('/inquiries/technologies', (req, res) => {
+  const sql = 'SELECT technology1, technology2, technology3, technology4, technology5 FROM company_inquiries';
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: '使用技術の取得に失敗しました' });
+    }
+    const techSet = new Set();
+    results.forEach(row => {
+      [row.technology1, row.technology2, row.technology3, row.technology4, row.technology5].forEach(tech => {
+        if (tech && tech.trim() !== '') {
+          techSet.add(tech.trim());
+        }
+      });
+    });
+    res.json(Array.from(techSet));
+  });
+});
+//絞り込みやってる(らしい）)
+app.get('/inquiries', (req, res) => {
+  const { technologies } = req.query;
+  
+  let sql = 'SELECT * FROM company_inquiries';
+  let params = [];
+  let conditions = [];
+  
+  if (technologies) {
+    const techArray = technologies.split(',').map(item => item.trim()).filter(item => item !== '');
+    if (techArray.length > 0) {
+      // 各技術について、technology1～technology5 のどれかに部分一致する条件を作成
+      techArray.forEach(tech => {
+        conditions.push(`(technology1 LIKE ? OR technology2 LIKE ? OR technology3 LIKE ? OR technology4 LIKE ? OR technology5 LIKE ?)`);
+        for (let i = 0; i < 5; i++) {
+          params.push(`%${tech}%`);
+        }
+      });
+    }
+  }
+  
+  if (conditions.length > 0) {
+    sql += " WHERE " + conditions.join(" AND ");
+  }
+  
+  sql += " ORDER BY created_at DESC";
+  
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: '求人情報の取得に失敗しました' });
+    }
+    res.json(results);
+  });
+});
 
 app.get('/protected', authenticateToken, (req, res) => {
   res.send(`認証されたユーザーです: ${req.user.username}`);
