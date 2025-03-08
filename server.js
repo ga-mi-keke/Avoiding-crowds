@@ -1,3 +1,5 @@
+//サーバー(内部的な処理するとこ)
+//↓必要な奴読み込んでる
 require('dotenv').config();
 const express = require('express');
 const bcrypt = require('bcrypt');
@@ -7,8 +9,9 @@ const bodyParser = require('body-parser');
 const app = express();
 const db = require('./db');
 const path = require('path');
-
+//?なんかいるらしい
 app.use(cors());
+//JSONデータを扱うためのやつ
 app.use(bodyParser.json());
 
 // 登録API（新規ユーザー作成）
