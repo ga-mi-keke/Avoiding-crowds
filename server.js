@@ -149,7 +149,7 @@ app.get('/inquiries', (req, res) => {
   }
   
   if (conditions.length > 0) {
-    sql += " WHERE " + conditions.join(" AND ");
+    sql += " WHERE " + conditions.join(" OR ");
   }
   
   sql += " ORDER BY created_at DESC";
