@@ -62,17 +62,19 @@ app.post('/login', (req, res) => {
   );
 });
 
-// 認証必須のテスト用API
+// authenticateToken ミドルウェア
 const authenticateToken = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(401).send('認証トークンがありません');
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: '認証トークンがありません' });
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).send('トークンが無効です');
-    req.user = user;
+    if (err) return res.status(403).json({ error: '無効なトークンです' });
+    req.user = user; // user オブジェクトには user.id やメールアドレスなどが含まれている前提
     next();
   });
 };
+
 // POST /inquiries エンドポイント（企業様向け問い合わせ登録）
 app.post('/inquiries', (req, res) => {
   const { email, company_name, company_description, technology1, technology2, technology3, technology4, technology5 } = req.body;
@@ -166,6 +168,88 @@ app.get('/inquiries', (req, res) => {
 app.get('/protected', authenticateToken, (req, res) => {
   res.send(`認証されたユーザーです: ${req.user.username}`);
 });
+// GET /profile
+app.get('/profile', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  db.query(
+    'SELECT name, birth_date, affiliation, phone, email FROM user_profiles WHERE user_id = ?',
+    [userId],
+    (err, results) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'プロフィール情報の取得に失敗しました' });
+      }
+      res.json(results[0] || {});
+    }
+  );
+});
+
+// PUT /profile（アップサート）
+app.put('/profile', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  const { name, birth_date, affiliation, phone, email } = req.body;
+  const sql = `
+    INSERT INTO user_profiles (user_id, name, birth_date, affiliation, phone, email)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      name = VALUES(name),
+      birth_date = VALUES(birth_date),
+      affiliation = VALUES(affiliation),
+      phone = VALUES(phone),
+      email = VALUES(email)
+  `;
+  const params = [userId, name, birth_date, affiliation, phone, email];
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'プロフィールの更新に失敗しました' });
+    }
+    res.json({ message: 'プロフィールの更新が完了しました' });
+  });
+});
+
+// GET /skills
+app.get('/skills', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  db.query(
+    'SELECT programming_languages, frameworks, `dbs`, cloud_platforms, dev_tools FROM user_skills WHERE user_id = ?',
+    [userId],
+    (err, results) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'スキル情報の取得に失敗しました' });
+      }
+      res.json(results[0] || {});
+    }
+  );
+});
+
+// PUT /skills（アップサート）
+app.put('/skills', authenticateToken, (req, res) => {
+  const userId = req.user.id;
+  // フロント側からは snake_case 形式で送信されることを期待
+  const { programming_languages, frameworks, dbs, cloud_platforms, dev_tools } = req.body;
+  const sql = `
+    INSERT INTO user_skills (user_id, programming_languages, frameworks, dbs, cloud_platforms, dev_tools)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      programming_languages = VALUES(programming_languages),
+      frameworks = VALUES(frameworks),
+      dbs = VALUES(dbs),
+      cloud_platforms = VALUES(cloud_platforms),
+      dev_tools = VALUES(dev_tools)
+  `;
+  const params = [userId, programming_languages, frameworks, dbs, cloud_platforms, dev_tools];
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'スキル情報の保存に失敗しました' });
+    }
+    res.json({ message: 'スキル情報の保存が完了しました' });
+  });
+});
+
+
 // Reactのビルドフォルダを静的ファイルとして配信
 app.use(express.static(path.join(__dirname, 'build')));
 
